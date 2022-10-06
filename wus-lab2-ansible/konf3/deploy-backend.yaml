@@ -1,0 +1,46 @@
+---
+- name: DEPLOY BACKEND
+  hosts: backend_machines
+  become: true
+
+  tasks:
+  - name: "apt-get update"
+    apt:
+      update_cache: yes
+      cache_valid_time: 3600
+
+  - name: install jre
+    apt:
+      name: ['default-jre']
+      state: latest
+
+  - name: stop backend app
+    command: /bin/bash -c "kill $( sudo lsof -i:{{ app_port }})"
+    ignore_errors: yes
+
+  - name: "delete previous backend folder"
+    file:
+      state: absent
+      path: "/home/{{ ansible_user }}/{{ inventory_hostname }}"
+
+  - name: "create backend folder"
+    file:
+      path: "/home/{{ ansible_user }}/{{ inventory_hostname }}"
+      state: directory
+      mode: '0775'
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+
+  - name: copy backend file
+    copy:
+      src: "{{ item }}"
+      dest: "/home/{{ ansible_user }}/{{ inventory_hostname }}/petclinic.jar"
+      mode: '0775'
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+    with_fileglob:
+      - "./spring-petclinic-rest/target/*.jar"
+
+  - name: run backend
+    become: false
+    shell: "export MYSQL_CONNECTION_STR=jdbc:mysql://{{ hostvars['database'].private_ip }}:3306/petclinic ; export MYSQL_USERNAME={{ hostvars['database'].db_username }} ; export MYSQL_PASSWORD={{ hostvars['database'].db_password }} ; nohup java -Dserver.port={{ app_port }} -jar /home/{{ ansible_user }}/{{ inventory_hostname }}/petclinic.jar</dev/null >/dev/null 2>&1 &"

@@ -1,0 +1,73 @@
+---
+- name: PREPARE DEPLOYMENT FILES
+  hosts: local_machine
+  gather_facts: false
+  become: false
+  tasks:
+    - name: checkout git angular project
+      ansible.builtin.git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-angular.git
+        dest: ./spring-petclinic-angular
+        update: no
+
+    - name: checkout git backend project
+      ansible.builtin.git:
+        repo: https://github.com/spring-petclinic/spring-petclinic-rest.git
+        dest: ./spring-petclinic-rest
+        update: no
+
+    - name: clear nginx config file
+      ansible.builtin.lineinfile:
+        path: ./resources/petclinic.conf
+        regexp: server *.*.*.*:*;
+        state: absent
+        backup: no
+
+    - name: prepare nginx config file
+      ansible.builtin.lineinfile:
+        path: ./resources/petclinic.conf
+        line: '    server {{ hostvars[item].private_ip }}:{{ hostvars[item].app_port }};'
+        insertafter: 'upstream petclinic_backend {'
+      with_items: "{{ groups['backend_machines'] }}"
+
+    - name: prepare angular environment.ts
+      ansible.builtin.lineinfile:
+        path: ./spring-petclinic-angular/src/environments/environment.prod.ts
+        regexp: 'REST_API_URL:' 
+        line: "  REST_API_URL: 'http://{{ hostvars['nginx'].public_ip }}:{{ hostvars['nginx'].app_port }}/petclinic/api/'"
+        backrefs: yes
+
+    - name: build frontend
+      ansible.builtin.lineinfile:
+        path: ./spring-petclinic-angular/src/environments/environment.prod.ts
+        regexp: 'REST_API_URL:' 
+        line: "  REST_API_URL: 'http://{{ hostvars['nginx'].public_ip }}:{{ hostvars['nginx'].app_port }}/petclinic/api/'"
+        backrefs: yes
+    
+    - name: Install frontend dependencies
+      command: npm install
+      args:
+        chdir: ./spring-petclinic-angular
+
+    - name: Build frontend project
+      command: ng build --prod
+      args:
+        chdir: ./spring-petclinic-angular
+
+    - name: change default backend profile to mysql
+      ansible.builtin.lineinfile:
+        path: ./spring-petclinic-rest/src/main/resources/application.properties
+        regexp: 'spring.profiles.active=hsqldb,spring-data-jpa' 
+        line: 'spring.profiles.active=mysql,spring-data-jpa'
+        backrefs: yes  
+
+    - name: replace backend mysql profile application properties file
+      ansible.builtin.copy:
+        src: ./resources/application-mysql.properties
+        dest: ./spring-petclinic-rest/src/main/resources/application-mysql.properties
+        force: yes
+
+    - name: build backend
+      command: ./mvnw clean install
+      args:
+        chdir: ./spring-petclinic-rest

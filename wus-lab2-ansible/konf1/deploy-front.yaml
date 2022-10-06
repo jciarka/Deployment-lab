@@ -1,0 +1,58 @@
+---
+- name: DEPLOY FRONTEND
+  hosts: nginx
+  become: true
+  tasks:
+  - name: "apt-get update"
+    apt:
+      update_cache: yes
+      cache_valid_time: 3600
+
+  - name: "install nginx"
+    apt:
+      name: ['nginx']
+      state: latest
+
+  - name: "delete previous www content"
+    file:
+      state: absent
+      path: /var/www/html/
+
+  - name: "create www directory"
+    file:
+      path: /var/www/html
+      state: directory
+      mode: '0775'
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+
+  - name: delete default nginx site
+    file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+    notify: restart nginx
+
+  - name: copy nginx configuration
+    template:
+      src: ./resources/petclinic.conf
+      dest: /etc/nginx/sites-enabled/petclinic.conf
+      owner: root
+      group: root
+      mode: '0644'
+    notify: restart nginx
+
+  - name: copy frontend bundles
+    copy:
+      src: ./spring-petclinic-angular/dist/
+      dest: /var/www/html/
+      directory_mode: yes
+      owner: root
+      group: root
+      mode: '0644'
+    notify: restart nginx
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: nginx
+        state: restarted

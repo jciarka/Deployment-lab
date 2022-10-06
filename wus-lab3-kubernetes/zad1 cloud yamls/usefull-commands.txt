@@ -1,0 +1,6 @@
+kubectl label nodes <__nazwy__> topology.springpetclinic.antiaffinityzone=true
+kubectl get nodes --show-labels | grep topology.springpetclinic.antiaffinityzone
+kubectl get pods -o wide
+kubectl config get-contexts
+kubectl config set current-context MY-CONTEXT
+kubectl config set-context --current --namespace=spring-petclinic

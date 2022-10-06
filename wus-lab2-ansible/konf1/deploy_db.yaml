@@ -1,0 +1,73 @@
+- name: Configure and deploy a MySQL DB
+  hosts: database_machines
+  become: yes
+  tasks:
+  - name: Update
+    apt:
+      update_cache: yes
+
+  - name: Install pip
+    apt:
+      name: python3-pip
+      state: latest
+
+  - name: Install PyMySQL
+    pip:
+      name: PyMySQL
+      state: latest
+
+  - name: Install MySQL
+    apt:
+      pkg:
+        - mysql-server
+        - mysql-client
+      state: latest
+      update_cache: true
+ 
+  - name: Start and enable mysql service
+    service:
+      name: mysql
+      state: started
+      enabled: yes
+
+  - name: Ensure mysql root password is updated for all root accounts
+    mysql_user:
+      name: root
+      login_unix_socket: /var/run/mysqld/mysqld.sock
+      password: "{{ mysql_root_pass }}"
+      priv: '*.*:ALL,GRANT'
+      check_implicit_admin: true
+    become: yes
+    ignore_errors: yes
+
+  - name: Create user petclinic
+    community.mysql.mysql_user:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      name: "{{ db_username }}"
+      password: "{{ db_password }}"
+      host: '%'
+      priv: "*.*:ALL"
+      state: present
+
+  - name: Create petclinic database
+    community.mysql.mysql_db:
+      login_user: "{{ db_username }}"
+      login_password: "{{ db_password }}"
+      name: petclinic
+      state: present
+  
+  - name: Enable remote login to mysql
+    lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: '^bind-address'
+        line: 'bind-address = 0.0.0.0'
+        backup: yes
+    notify:
+        - Restart mysql
+
+  handlers:
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted

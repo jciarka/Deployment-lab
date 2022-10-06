@@ -1,0 +1,124 @@
+- name: Create a MySQL docker container
+  hosts: database_machines
+  become: true
+  tasks:
+    - name: Update
+      apt:
+        update_cache: yes
+
+    - name: Install MySQL
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - virtualenv
+          - python3-setuptools
+        state: latest
+        update_cache: true
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: Install docker python module
+      pip:
+        name: docker
+        state: latest
+
+    - name: Create a docker container
+      community.docker.docker_container:
+        name: mysql_db
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ mysql_root_pass }}"
+          MYSQL_DATABASE: petclinic
+          MYSQL_USER: petclinic
+          MYSQL_PASSWORD: petclinic
+        state: started
+        restart: yes
+        ports: 
+          - "3306:3306"
+        exposed_ports:
+          - 3306
+
+    - name: Add container to inventory
+      add_host:
+        name: mysql_db
+        ansible_connection: docker
+      changed_when: false
+
+    - name: Create .sql files directory
+      file:
+        path: "/home/{{ ansible_user }}/sqlscripts"
+        state: directory
+        mode: '0775'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Copy .sql files for the DB
+      copy:
+        src: "{{ item }}"
+        dest: '/home/{{ ansible_user }}/sqlscripts/'
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - ./spring-petclinic-rest/src/main/resources/db/mysql/initDB.sql
+        - ./spring-petclinic-rest/src/main/resources/db/mysql/populateDB.sql
+
+    - name: Copy .sql files to MySQL container
+      shell: "docker cp /home/{{ ansible_user }}/sqlscripts/initDB.sql mysql_db:/ && docker cp /home/{{ ansible_user }}/sqlscripts/populateDB.sql mysql_db:/"
+
+    # - name: Change ownership and group of .sql files
+    #   delegate_to: mysql_db
+    #   ansible.builtin.file:
+    #     path: /initDB.sql
+    #     owner: root
+    #     group: root
+    #     mode: '0644'
+
+    # - name: Change ownership and group of populateDB.sql
+    #   delegate_to: mysql_db
+    #   ansible.builtin.file:
+    #     path: /populate
+    #     owner: root
+    #     group: root
+    #     mode: '0644'
+
+    - name: Init DB
+      community.docker.docker_container_exec:
+        container: mysql_db
+        command: "/bin/bash -c "mysql -u petclinic -p'petclinic' 
+
+    - name: Init DB
+      delegate_to: mysql_db
+      become: true
+      community.mysql.mysql_db:
+        # login_user: petclinic
+        # login_password: petclinic
+        name: petclinic
+        state: import
+        target: /initDB.sql
+
+    - name: Populate
+      delegate_to: mysql_db
+      become: true
+      community.mysql.mysql_db:
+        name: petclinic
+        state: import
+        target: /populateDB.sql

@@ -1,0 +1,6 @@
+klucz ip port lok_proj_loklanie vm_loc_ip vm_rs_group vm_host vm_user
+frontend 20.223.146.140 4200 spring-petclinic-angular 10.0.0.4 vm-test vm-test-1 testuser
+nginx 20.223.146.140 80 _ 10.0.0.4 vm-test vm-test-1 testuser
+backendmaster 20.223.146.140 9966 spring-petclinic-rest 10.0.0.4 vm-test vm-test-1 testuser
+backendslave 20.223.146.140 9967 spring-petclinic-rest 10.0.0.4 vm-test vm-test-1 testuser
+database 20.223.146.140 3306 _ 10.0.0.4 vm-test vm-test-1 testuser

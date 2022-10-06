@@ -1,0 +1,42 @@
+---
+
+all:  
+  hosts:
+    local_machine:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+
+  children:
+    backend_machines:
+      hosts:
+        backend1:
+          ansible_user: azureuser
+          ansible_ssh_host: '20.234.118.101'
+          public_ip: '20.234.118.101'
+          private_ip: '10.0.0.5'
+          app_port: 9966
+        backend2:
+          ansible_user: azureuser
+          ansible_ssh_host: '20.234.3.250'
+          public_ip: '20.234.3.250'
+          private_ip: '10.0.0.6'
+          app_port: 9967
+    frontend_machines:
+      hosts:
+        nginx:
+          ansible_user: azureuser
+          ansible_ssh_host: '20.234.118.101'
+          public_ip: '20.234.118.101'
+          private_ip: '10.0.0.5'
+          app_port: 80
+    database_machines:
+      hosts:
+        database:
+          ansible_user: azureuser
+          ansible_ssh_host: '20.234.118.101'
+          public_ip: '20.234.118.101'
+          private_ip: '10.0.0.5'
+          app_port: 3306
+          db_username: 'petclinic'
+          db_password: 'petclinic'
+          mysql_root_pass: Qwerty!@#123

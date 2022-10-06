@@ -1,0 +1,71 @@
+- name: Configure the DB into master-slave replication
+  hosts: database_machines
+  become: yes
+  tasks:
+  - name: Create replication DB
+    community.mysql.mysql_db:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      name: replica
+      state: present
+
+  - name: Change my.cnf
+    copy:
+      src: "{{ item }}"
+      dest: '/etc/mysql/my.cnf'
+      mode: '0644'
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+    with_fileglob:
+      "./resources/my.cnf"
+    notify:
+      - Restart mysql
+
+  - name: Restart MySQL
+    command: "/etc/init.d/mysql restart"
+
+  - name: Add replication user
+    community.mysql.mysql_user:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      name: "{{ repl_user }}"
+      password: "{{ repl_pass }}"
+      host: '%'
+      priv: "*.*:REPLICATION SLAVE"
+      state: present
+  
+  - name: Stop slave
+    community.mysql.mysql_query:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      query: stop slave
+
+  - name: Update privileges
+    community.mysql.mysql_query:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      query: flush privileges
+
+  - name: Change mysql variables
+    community.mysql.mysql_replication:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      mode: changeprimary
+      primary_host: "{{ hostvars['database'].public_ip }}"
+      primary_log_file: mysql-bin.000001
+      primary_log_pos: 154
+      master_user: replicant
+      master_password: replicant
+
+  - name: Start slave
+    community.mysql.mysql_query:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      query: start slave
+
+  handlers:
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted
+

@@ -1,0 +1,143 @@
+- name: Configure and deploy a MySQL DB
+  hosts: database_machines
+  become: yes
+  tasks:
+  - name: Update
+    apt:
+      update_cache: yes
+
+  - name: Install pip
+    apt:
+      name: python3-pip
+      state: latest
+
+  - name: Install PyMySQL
+    pip:
+      name: PyMySQL
+      state: latest
+
+  - name: Install MySQL
+    apt:
+      pkg:
+        - mysql-server
+        - mysql-client
+      state: latest
+      update_cache: true
+
+  # - name: prepare mysql config file part 1
+  #   ansible.builtin.lineinfile:
+  #     path: /etc/mysql/mysql.conf.d/mysqld.cnf
+  #     regexp: 'mysqlx-bind-address.*=.*127.0.0.1' 
+  #     line: 'mysqlx-bind-address     = 0.0.0.0'
+  #     backrefs: yes  
+
+  # - name: prepare mysql config file part 2
+  #   ansible.builtin.lineinfile:
+  #     path: /etc/mysql/mysql.conf.d/mysqld.cnf
+  #     regexp: 'bind-address.*=.*127.0.0.1' 
+  #     line: 'bind-address            = 0.0.0.0'
+  #     backrefs: yes    
+ 
+  - name: Start and enable mysql service
+    service:
+      name: mysql
+      state: started
+      enabled: yes
+
+  - name: Ensure startup on boot
+    service:
+      name: mysql
+      state: started
+      enabled: true
+
+  # - name: Ensure mysql root password is updated for all root accounts
+  #   mysql_user:
+  #     name: root
+  #     # login_unix_socket: /var/run/mysqld/mysqld.sock
+  #     password: "{{ mysql_root_pass }}"
+  #     priv: '*.*:ALL,GRANT'
+  #     check_implicit_admin: true
+  #   become: yes
+  #   ignore_errors: yes
+
+  # - name: Create `/root/.my.cnf`  with root password credentials
+  #   template:
+  #     src: my.cnf.j2
+  #     dest: /root/.my.cnf
+  #     owner: root
+  #     mode: 0600
+  #   become: yes
+
+  - name: Set login_host
+    community.mysql.mysql_variables:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      variable: login_host
+      value: 10.0.0.4
+
+  - name: Create user petclinic
+    community.mysql.mysql_user:
+      login_user: root
+      login_password: "{{ mysql_root_pass }}"
+      name: petclinic
+      password: petclinic
+      host: '%'
+      priv: "*.*:ALL"
+      state: present
+
+  - name: Create petclinic database
+    community.mysql.mysql_db:
+      login_user: petclinic
+      login_password: petclinic
+      name: petclinic
+      state: present
+  
+  - name: Enable remote login to mysql
+    lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: '^bind-address'
+        line: 'bind-address = 0.0.0.0'
+        backup: yes
+    notify:
+        - Restart mysql
+
+  # - name: Create .sql files directory
+  #   file:
+  #     path: "/home/{{ ansible_user }}/sqlscripts"
+  #     state: directory
+  #     mode: '0775'
+  #     owner: "{{ ansible_user }}"
+  #     group: "{{ ansible_user }}"
+
+  # - name: Copy .sql files for the DB
+  #   copy:
+  #     src: "{{ item }}"
+  #     dest: '/home/{{ ansible_user }}/sqlscripts/'
+  #     mode: '0644'
+  #     owner: "{{ ansible_user }}"
+  #     group: "{{ ansible_user }}"
+  #   loop:
+  #     - ./spring-petclinic-rest/src/main/resources/db/mysql/initDB.sql
+  #     - ./spring-petclinic-rest/src/main/resources/db/mysql/populateDB.sql
+
+  # - name: Init DB
+  #   community.mysql.mysql_db:
+  #     login_user: petclinic
+  #     login_password: petclinic
+  #     name: petclinic
+  #     state: import
+  #     target: /home/{{ ansible_user }}/sqlscripts/initDB.sql
+
+  # - name: Populate
+  #   community.mysql.mysql_db:
+  #     login_user: petclinic
+  #     login_password: petclinic
+  #     name: petclinic
+  #     state: import
+  #     target: /home/{{ ansible_user }}/sqlscripts/populateDB.sql
+
+  handlers:
+    - name: Restart mysql
+      service:
+        name: mysql
+        state: restarted
